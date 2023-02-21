@@ -1,0 +1,1056 @@
+---
+---
+---
+
+# UNDataSetStatisticalAnalytics
+
+The Global Terrorism Database (GTD) is a comprehensive dataset maintained by the National Consortium for the Study of Terrorism and Responses to Terrorism (START). It provides a standardized framework for collecting and coding information on terrorist events worldwide. The dataset includes detailed information on various aspects of terrorist attacks, such as the date, location, weapon type, perpetrator group, and target type. Analyzing this dataset can provide valuable insights into terrorist behavior, which in turn can inform the development of effective anti-terrorism policies and programs. Given the pressing nature of the issue of terrorism in the modern era, the analysis of this dataset is of utmost significance. In this project, we will conduct statistical analytics on the GTD using R notebook, with the aim of gaining a deeper understanding of the patterns and trends in terrorist activity over time and across different regions. The results of this analysis can serve as a valuable resource for policymakers, researchers, and other stakeholders working in the field of counterterrorism. This GitHub repository contains the code and documentation for our analysis, along with the raw data from the GTD.
+
+### Importing data and packages
+
+Let's import the dataset.
+
+```{r setup, warning=FALSE}
+my_data <- read.csv("Data.csv" , header = TRUE , na.strings = c("" , "NA"), fileEncoding="latin1")
+
+# list of package names to install
+packages <- c("ggplot2", "e1071", "knitr", "kableExtra", "magrittr", "summarytools", "broom", "data.table", "DAAG", "pROC")
+
+
+# install and load packages that are not installed
+for (package in packages) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package)
+    suppressMessages(library(package, character.only = TRUE, quietly = TRUE))
+  }
+}
+
+source("inference.R")
+
+# missing values in data set are empty cells (""). We changed them to "NA" since R knows missing values as "NA"
+```
+
+A table description of the most important features in this dataset:
+
+| No. | Name of var  | Kind of var    | Description                                             |
+|------------------|------------------|------------------|-------------------|
+| 1   | iyear        | Num- Discrete  | Year of occurrence of the attack                        |
+| 2   | multiple     | Cat- Nominal   | Is attack part of multiple attacks or not               |
+| 3   | country      | Cat- Nominal   | Country of the attack                                   |
+| 4   | region       | Cat- Nominal   | Region of the attack                                    |
+| 5   | latitude     | Num- Continues | Latitude of the location of the attack                  |
+| 6   | longitude    | Num- Continues | Longitude of the location of the attack                 |
+| 7   | attacktype_1 | Cat- Nominal   | Main type of the attack                                 |
+| 8   | success      | Cat- Nominal   | Whether an attack is successful or not                  |
+| 9   | suicide      | Cat- Nominal   | Whether an attack is suicidal or not                    |
+| 10  | weapontype1  | Cat- Nominal   | Type of the weapon used in the attack                   |
+| 11  | targettype1  | Cat- Nominal   | Type of the targets (business, governments, etc.)       |
+| 12  | individual   | Cat- Nominal   | Whether the attack performed by an individual or not    |
+| 13  | nperps       | Num- Discrete  | Number of perpetrators                                  |
+| 14  | nperpcap     | Num- Discrete  | Number of captured perpetrators                         |
+| 15  | claimed      | Cat- Nominal   | Whether the attack is claimed by an organization or not |
+| 16  | compclaim    | Cat- Nominal   | In case of attacks claimed by several groups            |
+| 17  | nkill        | Num- Discrete  | Total number of fatalities                              |
+| 18  | nkillter     | Num- Discrete  | Number of fatalities only in perpetrators               |
+| 19  | nwound       | Num- Discrete  | Total number of injuries                                |
+| 20  | property     | Cat- Nominal   | Indicates property damage in an attack                  |
+
+### Missing Values
+
+First we take a look at missing percentages in all columns
+
+```{r}
+##calculating the missing percentages
+missing <- c()
+col.names <- colnames(my_data)
+for(i in 1:length(col.names)){
+  miss.col = sum(is.na(my_data[[i]]))/56337
+  missing <- c(missing , miss.col)
+}
+## print the outputs
+for( i in 1:length(col.names)){
+  if(missing[i] != 0.0){
+    print(paste(col.names[i] ," p= " , missing[i]))
+  }
+}
+```
+## Exploratory Data Analysis
+
+Based on the present dataset, since the percentage of missing data in some variables is more than 5%, it was not appropriate to remove the rows with missing values. Therefore, to deal with the missing values, one approach that was used was to impute the missing values using the mean of the variable. The mean imputation approach is a commonly used method when the missing data are considered to be missing at random (MAR). By using the mean to fill in missing values, we aimed to reduce the bias in the data, obtain a complete dataset, and facilitate further statistical analyses. However, it is important to note that mean imputation assumes that the missing data are MAR, and it can also result in underestimating the variability of the variable. Therefore, we carefully evaluated the appropriateness of this approach and considered other methods for imputing missing data, such as predictive modeling, if the missing data were not MAR.
+
+### Analysis the iyear feature
+
+Our analysis aims to investigate the variable "iyear", which denotes the year of occurrence for a given terrorist attack. Exploring this variable can offer insights into the trends of terrorist activities and assess the effectiveness of counter-terrorism policies.
+
+While the variable "iyear" could be argued to be an ordinal categorical variable, based on the nature of the data, the publisher has categorized it as a numerical variable in the codebook for this dataset. As such, we will retain the variable's designation as a numerical variable as provided by the publisher in our analysis. We will analyze "iyear" as a continuous variable, using appropriate statistical techniques to explore its distribution and relationships with other variables in the dataset. Our findings can contribute to a better understanding of the temporal patterns and drivers of terrorist incidents and provide valuable insights for policy-makers and researchers.
+
+To see the distribution let's plot the histogram using the proper bin size and density plot:
+
+$bin Size = 2 \times IQR \times (sample Size)^{-\frac{1}{3}}$
+
+```{r}
+year <- my_data$iyear
+
+# Calculate bin size
+IQR <- quantile(year)[[4]] - quantile(year)[[2]]
+sample.size <- length(year)
+binwidth <- 2*IQR*(sample.size^(-1/3))   # recomended bin size
+
+# Create histogram plot
+hist_plot <- ggplot(data = data.frame(year), aes(x = year)) +
+  geom_histogram(binwidth = binwidth, color = "white", fill = "#69b3a2") +
+  labs(title = "Histogram of the year of attacks", x = "Year", y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Create density plot
+density_plot <- ggplot(data = data.frame(year), aes(x = year)) +
+  geom_density(color = "#69b3a2", fill = "#69b3a2", alpha = 0.5) +
+  labs(title = "Density plot of the year of attacks", x = "Year", y = "Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Display the plots
+hist_plot
+density_plot
+```
+
+Utilizing a density plot and a histogram, we determined that the distribution of the variable "iyear" is unimodal with a left-skewed pattern. For a more comprehensive analysis, we computed the precise skewness value of the distribution, along with its mean, variance, and standard deviation.
+
+$skewness = E[(\frac{X-\mu}{\sigma})^3]$
+
+```{r}
+year_mean <- mean(year)
+year_var <- var(year)
+year_sd <- sd(year)
+year_skew <- skewness(year)
+print(paste("mean: ", year_mean))
+print(paste("variance: ", year_var))
+print(paste("standard deviation: ", year_sd))
+print(paste("skewness: ", year_skew))
+```
+
+The significant left skewness observed in the data indicates a substantial rise in the number of attacks in recent years, which is a cause for concern. Furthermore, it is noteworthy that this increase is not uniformly distributed throughout the time series but appears to be concentrated in specific years or periods. Additional research is needed to identify the underlying causes of this trend
+
+now let's analyze the boxplot and the outliers
+
+```{r}
+# Create box plot
+# Create boxplot with ggplot2
+ggplot(data = data.frame(year), aes(x = "", y = year)) +
+  geom_boxplot(fill = "#6baed6", color = "#3182bd", size = 0.7, outlier.color = "red") +
+  labs(y = "Year", x = "") +
+  theme_minimal(base_size = 14) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(color = "black"),
+        axis.title = element_text(color = "black", size = 14)) +
+  ggtitle("Box Plot of Year of Attacks") +
+  coord_flip()
+
+#calculate properties of boxplot
+year_q1 <- quantile(year)[[2]]
+year_q3 <- quantile(year)[[4]]
+year_IQR <- year_q3 - year_q1
+yaer_lowerFence <- year_q1 - (1.5*year_IQR)
+year_upperFence <- year_q3 + (3*year_IQR)
+
+# outlier table
+year_out <- boxplot.stats(year)$out
+outliers_table <- as.data.frame(table(year_out))
+outliers_table$Year <- as.character(outliers_table$year_out)
+
+print(outliers_table[, c("Year", "Freq")])
+```
+
+The boxplot analysis identified years prior to 1997 as outliers, indicating an increasing trend in the distribution of terrorist attacks over the studied period. This finding along with the left skewness of the data distribution, suggests a significant increase in the frequency of attacks in recent years.
+
+For report purposes, we calculated the frequency of terrorist attacks on the dates identified as outliers.
+
+### Analysis of the event casualties with other numerical features
+
+In this section, we aim to identify the variables that are related to the number of fatal casualties during a terrorist attack. The identification of such variables is crucial for policymakers and counterterrorism experts to take appropriate actions in reducing the number of casualties in such events. By analyzing these variables, we can gain insights into the factors that contribute to the severity of a terrorist attack, and hence, develop strategies to mitigate their impact.
+
+To investigate the variables that might relate to the fatal casualties in a terrorist attack, we use a combination of descriptive and inferential statistical methods. We first identify the variables that are potentially correlated with the number of fatal casualties, and then perform regression analysis to understand the strength and direction of the relationships. By doing so, we can gain insights into the factors that are most critical in determining the severity of an attack and prioritize them for further analysis. Overall, this investigation can help us develop a better understanding of the underlying mechanisms that drive the number of fatalities in terrorist attacks, and inform more effective counterterrorism policies and strategies.
+
+#### Analysis of the scatterplots
+
+Scatter plots are a powerful tool for visually identifying the relationships between numerical variables. In this section, we investigate the relationship of the **`nkill`** variable, which represents the total number of fatalities in a terrorist attack, with two other variables, **`nwound`** (the total number of injuries) and **`nperpcap`** (the number of captured perpetrators), as well as with **`nperps`** (the number of perpetrators). By plotting these variables against **`nkill`** on a scatter plot, we can explore potential correlations between them and gain insights into factors that may contribute to the number of fatalities in a terrorist attack.
+
+In this section, it is worth noting that several variables contain missing values that need to be addressed before further analysis can be carried out. Additionally, as the histograms of these variables exhibit a high degree of skewness, it is recommended to use the median instead of the mean to fill in the missing values. This approach ensures that the central tendency of the variable is not skewed by extreme values. Thus, the median is a more robust measure of central tendency in such cases.
+
+```{r}
+wound <- my_data$nwound
+kill <- my_data$nkill
+kill[is.na(kill)] <- median(kill, na.rm = TRUE)           
+wound[is.na(wound)] <- median(wound, na.rm = TRUE)
+# we chose median for missing value substitution because since histogram of all the
+# numerical variables in this data set are highly skwed and therefore, unig mean is 
+# not recommended.
+ggplot(my_data, aes(x=wound, y=kill)) + 
+  geom_point(alpha=0.5, color="darkred", size=3) +
+  xlim(0,500) + ylim(0,400) +
+  ggtitle("Relationship between Total Number of Injuries and Fatalities") +
+  xlab("Total Number of Injuries") + ylab("Total Number of Fatalities") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 12, face = "bold"),
+        axis.title.y = element_text(size = 12, face = "bold"),
+        axis.text = element_text(size = 10))
+
+```
+
+Based on the scatter plot, it appears that there is a weak linear relationship between the two variables being analyzed.
+
+In order to verify the existence of a linear relationship between the two variables, we calculated the correlation coefficient and also added a smooth regression line to visually confirm the initial observation.
+
+```{r}
+kill[is.na(kill)] <- median(kill, na.rm = TRUE)
+wound[is.na(wound)] <- median(wound, na.rm = TRUE)
+print(cor(kill,wound))
+
+```
+
+The coefficients confirms weak linear correlation.
+
+```{r}
+ggplot(my_data, aes(x = wound, y = kill)) +
+  geom_point(color = "darkred") +
+  geom_smooth(se = FALSE, color = "#ff7f0e") +
+  xlim(0, 500) + ylim(0, 400) +
+  labs(title = "Scatter Plot of Total Number of Injuries vs Total Number of Fatalities",
+       x = "Total Number of Injuries",
+       y = "Total Number of Fatalities") +
+  theme_minimal()
+
+```
+
+nkills vs nperpcap
+
+```{r}
+
+kill <- my_data$nkill
+kill[is.na(kill)] <- median(kill, na.rm = TRUE)  
+perpcap <- my_data$nperpcap
+perpcap[is.na(perpcap)] <- median(perpcap, na.rm = TRUE)
+perp <- my_data$nperps
+perp[is.na(perp)] <- median(perp, na.rm= TRUE)
+
+ggplot(my_data, aes(x = perpcap, y = kill)) +
+  geom_point(color = "darkred") +
+  geom_smooth(se = FALSE, color = "#ff7f0e") +
+  xlim(0, 150) + ylim(0, 400) +
+  labs(title = "Number of Captured Perpetrators vs Total Number of Fatalities",
+       x = "Number of Captured Perpetrators",
+       y = "Total Number of Fatalities") +
+  theme_minimal()
+
+ggplot(my_data, aes(x = perp, y = kill)) +
+  geom_point(color = "darkred") +
+  geom_smooth(se = FALSE, color = "#ff7f0e") +
+  xlim(0, 200) + ylim(0, 400) +
+  labs(title = "Number of Perpetrators vs Total Number of Fatalities",
+       x = "Number of Perpetrators",
+       y = "Total Number of Fatalities") +
+  theme_minimal()
+
+print(paste("perpcap -- kill correlations coeficient: ", cor(perpcap,kill)))
+print(paste("perp -- kill correlations coeficient: ", cor(perp,kill)))
+```
+
+It is observed that the low correlation between the number of perpetrators and the number of fatalities in this scatter plot indicates that the number of perpetrators does not have a strong effect on the number of fatalities. Similarly, the low correlation between kills and captured perpetrators shows that the number of perpetrators captured does not have a significant impact on the number of fatalities. These observations suggest that factors such as the weapons used, the location and timing of the attack, and the number of civilians present at the time of the attack may have a more significant impact on the number of fatalities. Therefore, a comprehensive analysis of all relevant factors is necessary for a better understanding of the factors that contribute to the number of casualties in a terrorist attack.
+
+### Correlation analysis
+
+To further analyze we draw the correlation heatmap:
+
+```{r}
+get_upper_tri <- function(cormat) {
+  cormat[lower.tri(cormat)] <- NA
+  return(cormat)
+}
+
+mydata <- my_data[, c(2, 3, 4, 70, 99, 102)]
+wound <- my_data$nwound
+perp <- my_data$nperps
+perp[is.na(perp)] <- median(perp, na.rm = TRUE)           
+wound[is.na(wound)] <- median(wound, na.rm = TRUE)
+mydata[, 6] <- wound
+mydata[, 4] <- perp
+
+cormat <- round(cor(mydata), 2)
+upper_tri <- get_upper_tri(cormat)
+
+library(reshape2)
+melted_cormat <- melt(upper_tri, na.rm = TRUE)
+
+library(ggplot2)
+
+ggplot(data = melted_cormat, aes(Var2, Var1, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "darkblue", high = "red", mid = "blue",
+                       midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name = "Correlation", guide = "colorbar", 
+                       na.value = "grey50") +
+  geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+  theme_minimal() +
+  theme(
+    panel.border = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    legend.position = "right",
+    legend.direction = "vertical",
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 14, hjust = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    legend.background = element_rect(fill = "white")
+  ) +
+  labs(
+    title = "Correlation Heatmap for Numerical Variables",
+    subtitle = "Observational Study Only"
+  )
+
+```
+
+The presented correlation heatmap displays the correlation values between six numerical variables. However, it is important to note that the observations are derived from an observational study. Therefore, it is impossible to establish a causal relationship between these variables. Despite the considerable correlation coefficient between nkill and nwound, a causal relationship cannot be confirmed based on the correlation heatmap alone.
+
+### Analysis of the Regions of the attack:
+
+In this section, we aim to investigate the **`region_txt`** feature, which identifies the region in which the incident occurred. The regions are categorized into 12 different categories, including North America, Central America & Caribbean, South America, East Asia, Southeast Asia, South Asia, Central Asia, Western Europe, Eastern Europe, Middle East & North Africa, Sub-Saharan Africa, and Australasia & Oceania. Analyzing this feature will provide valuable insights into the geographical distribution of terrorist incidents and help identify regions that are particularly vulnerable to such attacks.
+
+Furthermore, by examining the correlation between the **`region_txt`** feature and other variables in our dataset, we can gain a better understanding of the factors that contribute to terrorist incidents in different regions. For instance, we can investigate whether the type of attack or the weapon used in an incident is correlated with a particular region.
+
+We start by a bar-plot and frequency table to get a sense of the data:
+
+```{r}
+my_data <- read.csv("Data.csv" , header = TRUE , na.strings = c("" , "NA"), fileEncoding="latin1")
+ggplot(my_data , aes(x = region_txt , fill = region_txt)) + geom_bar() + 
+  labs(x="Region ", title='Bar plot for region') + guides(fill=guide_legend(reverse = TRUE))+
+    theme(axis.text.x = element_text(angle=90, vjust=0.6))+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+    theme(legend.position = "none")+
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+freq_table <- freq(my_data$region_txt, order = "freq")
+kable(freq_table, caption = "Frequency table for region_txt variable") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+```
+
+As we mentioned earlier, one of the important factors in the analysis of terrorist incidents is the type of attack. In this section, we investigate the relationship between the region where the incident occurred and the type of attack used. This analysis can provide insights into any patterns or trends that may exist in the data. To facilitate this investigation, we will present the results using both a segmented bar plot and a contingency table.
+
+#### Regions and attack types:
+
+```{r}
+library(kableExtra)
+
+# Create contingency table
+region <- my_data$region_txt
+attacktype <- my_data$attacktype1_txt
+ctab <- table(region, attacktype)
+
+# Convert to data frame for easier manipulation
+ctab_df <- as.data.frame.matrix(ctab)
+
+# Add totals row and column
+ctab_df$Total <- rowSums(ctab_df)
+ctab_df <- rbind(ctab_df, colSums(ctab_df))
+ctab_df[length(ctab_df[,1]),1] <- "Total"
+
+# Format table
+kbl(ctab_df, align = "c") %>%
+  row_spec(length(ctab_df[,1]), bold = TRUE) %>%
+  column_spec(length(ctab_df[1,]), bold = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+```
+
+#### Region's segmented bar-plot
+
+```{r}
+ggplot(my_data, aes(x = region_txt, fill = attacktype1_txt)) + 
+  geom_bar() + 
+  labs(title = "Distribution of Attack Types by Region", 
+       x = "Region", y = "Number of Attacks") + 
+  theme(axis.text.x = element_text(angle=90, hjust = 1, vjust = 0.5),
+        axis.text.y = element_text(size = 10),
+        legend.position = "right",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) + 
+  scale_fill_discrete(name = "Attack Type")
+
+```
+
+We can see that the Middle East & North Africa has the highest number of attacks, with 22,831 attacks in total. The most common attack type in this region is bombing/explosion, with 14,139 attacks. South Asia is the second most affected region with 18,487 total attacks, and armed assault is the most common type of attack in this region.
+
+Eastern Europe, Central Asia, and Sub-Saharan Africa also have a high number of attacks, with 1,530, 197, and 7,106 total attacks respectively. In contrast, Australasia & Oceania has the lowest number of attacks with only 15 total attacks.
+
+The most common attack type overall is assassination, with a total of 24,805 attacks worldwide.
+
+## Statistical Analysis
+
+After getting a sense of data with descriptive analysis now, we would like to statistically answer important questions about patterns we found in data.
+
+To do this, we will perform various statistical tests to examine relationships and differences between variables. We will also build predictive models to identify factors that are most predictive of the target variable
+
+Some of the statistical tests we plan to use include chi-square tests and t-tests to assess relationships and differences between categorical and continuous variables, respectively. We will also perform regression analysis to investigate the relationship between the target variable and various predictors.
+
+### Analysis of the number of fatalities:
+
+First we build a confidence interval for the mean
+
+In this study, it is crucial to ensure that the samples are independent from each other and that the sampling has been performed randomly. Additionally, since the population is highly skewed, we require a larger sample size to ensure that the sample is representative of the population. In order to satisfy the condition of less than 10% (since we are sampling with replacement), we choose a sample size of 5600. This will allow us to obtain accurate results when calculating the confidence interval.
+
+```{r}
+# Extract the column for the number of kills from the dataset
+kill <- my_data$nkill
+
+# Get the sample size (number of observations)
+sample.size <- length(kill)
+
+# Randomly sample 5600 observations with replacement from the number of kills data
+sample_data <- my_data[sample(nrow(my_data), 5600, replace = TRUE), ]$nkill
+
+# Calculate the sample mean, standard deviation, and sample size
+mu <- mean(sample_data)
+sd <- sd(sample_data)
+n <- length(sample_data)
+
+# Set the desired significance level (alpha) to 0.02
+alpha = 0.02
+
+# Calculate the standard error of the mean
+se <- sd / sqrt(n)
+
+# Calculate the z-score based on the desired confidence level (1 - alpha/2)
+z <- qnorm(1 - alpha/2)
+
+# Calculate the lower and upper bounds of the confidence interval
+CI_low <- mu - (z * se)
+CI_high <- mu + (z * se)
+
+# Combine the lower and upper bounds into a formatted string for display
+Confidence_interval <- paste("(", CI_low, ",", CI_high, ")")
+
+# Print the confidence interval
+print(paste("98% confidence interval: ", Confidence_interval))
+```
+
+Given the following sample statistics:
+
+Sample size (n) = 5600 Sample mean (x̅) = 4.762 Sample standard deviation (sd) = 20.565 we can calculate the standard error (SE) as:
+
+$$ SE = \frac{sd}{\sqrt{n}} = \frac{20.565}{\sqrt{5600}} = 0.2749 $$
+
+Using a significance level of α = 0.02, we can find the z-value corresponding to a 2-tailed confidence interval as:
+
+$$ z^* = qnorm(1 - \frac{\alpha}{2}) = qnorm(0.99) = 2.3263 $$
+
+where qnorm is the R function that returns the z-value for a given probability in the standard normal distribution.
+
+With these values, we can calculate the confidence interval (CI) for the true population mean using the formula:
+
+$$ CI = (x̅ - z^* SE, x̅ + z^* SE) = (4.1229, 5.4017) $$
+
+Therefore, we can conclude that we are 98% confident that the true population mean falls within the interval (4.1229, 5.4017).
+
+This confidence interval states that we are 98% confident that the real mean of the population is located at this interval.
+
+Now lets fantasize that our mean is 5. we would like to perform a hypothesis test checking this assumption:
+
+```{r}
+sample_data <-my_data[sample(nrow(my_data), 5600 ,  replace = TRUE), ]$nkill
+mu <- mean(sample_data)
+sd <- sd(sample_data)
+n <- length(sample_data)
+alpha = 0.02
+se <- sd/sqrt(n)
+z = (mu-5)/se
+2-2*pnorm(z , lower.tail = FALSE)
+```
+
+Hypothesis test:
+
+$H_0:\mu=5$ -- the real mean of the population is 5.
+
+$H_A:\mu\neq5$ -- the real mean of the population is not 5.
+
+Calculating the p-value:
+
+$n=5600, \sigma=10.562, \bar{x}=4.790 \rightarrow SE = \frac{\sigma}{\sqrt{n}} = 0.1411$ $z^* = \frac{\bar{x}-\mu}{SE} = -1.4902, \alpha=0.02 \rightarrow p(|z|>z^*)=2-2p(z<z^*)=0.1361 \nless 0.05$
+
+We do not have enough evidence to reject the null hypothesis.
+
+However, to see how robust our test is we need to check the power of the test
+
+The power of a binary hypothesis test is the probability that the test correctly rejects the null hypothesis ($H_0$) when a specific alternative hypothesis ($H_1$) is true. It is commonly denoted by $1-\beta$, and represents the chances of a true positive detection conditional on the actual existence of an effect to detect. Statistical power ranges from 0 to 1, and as the power of a test increases, the probability $\beta$ of making a type II error by wrongly failing to reject the null hypothesis decreases.
+
+```{r}
+# Define parameters
+real.mu <- mean(my_data$nkill)
+real.sd <- sd(my_data$nkill)
+my.sd <- c(real.sd, 10.562)
+my.means <- c(real.mu, 5)
+
+# Create X values for plotting true distribution
+X <- seq(my.means[1] - my.sd[1] * 5, my.means[1] + my.sd[1] * 5, length = 100)
+dX <- dnorm(X, mean = my.means[1], sd = my.sd[1])
+
+# Create X values for plotting sampled distribution
+X.2 <- seq(my.means[2] - my.sd[2] * 5, my.means[2] + my.sd[2] * 5, length = 100)
+dX.2 <- dnorm(X.2, mean = my.means[2], sd = my.sd[2])
+
+# Plot the distributions
+plot(X, dX, type = "l", lty = 1, xlab = "x value",
+     ylab = "Density", main = "Comparison of Type II error probability",
+     xlim = c(min(X, X.2), max(X, X.2)), ylim = c(0, 0.07),
+     col = "blue")
+lines(X.2, dX.2, lty = 1, col = "red", lwd = 2)
+abline(v = my.means, lty = c(1, 2), col = "black", lwd = 1)
+legend("topleft", c("True Distribution", "Sampled Distribution"),
+       lty = c(1, 1), col = c("blue", "red"), lwd = 2,
+       title = expression(paste("Distributions")))
+x <- (my.means[1] - my.means[2]) / my.sd[2]
+
+```
+
+As seen in the above plot, the means of the true and sampled distributions are very close, this suggests a low power.
+
+$\mu = 7.4289$
+
+$\bar{x}_{claim} = 5$, $\text{sd}_{claim} = 10.562$
+
+$z=\frac{\bar{x}_{claim} - \mu}{\text{sd}_{claim}}=\frac{5-4.8862}{10.562}=-0.01078$
+
+$\beta = P(z < -0.01078) = 0.504299$ Type II error
+
+$Power = 1 - \beta = 0.4957011$
+
+As seen here we have a low power and therefore a weak test. However, the 98% confidence level can give us a narrow enough range for the mean of the nkill feature.
+
+### Analysis of number of fatalities in different regions:
+
+After conducting exploratory analysis, it is evident that the number of attacks in different regions varies substantially. In order to determine if the mean fatalities is significantly different around the world, we have performed an ANOVA (Analysis of Variance) test. This test allows us to compare the means of multiple groups simultaneously and determine if there is a significant difference between them.
+
+Prior to performing ANOVA, it is essential to verify the assumptions necessary for conducting the test.
+
+-   Independence
+
+    -   Between-group independence: The observations in one group should not be related to the observations in other groups. (satisfied)
+
+    -   Inner-group independence: The observations within each group should be independent of each other. (satisfied)
+
+-   Normal distribution and symmetry
+
+    -   The distribution of the data should be approximately normal. (not satisfied)
+
+    -   The variance of the data in each group should be approximately equal. (not satisfied)
+
+While it is generally recommended to satisfy all the necessary conditions before conducting a statistical test, in some cases it may still be appropriate to perform the test and interpret the results with caution. In this particular case, even though the normality and equal variance assumptions are not satisfied, we still perform the ANOVA test to gain some insights into whether the mean fatalities is significantly different around the world.
+
+However, to ensure the validity of our conclusions, we also use other tests to verify whether the results of the ANOVA test can be trusted.
+
+```{r}
+my_data <- read.csv("Data.csv" , header = TRUE , na.strings = c("" , "NA"), fileEncoding="latin1")
+
+# Perform ANOVA test
+myanovatest <- aov(my_data$nkill ~ my_data$region_txt, data = my_data)
+
+# Convert ANOVA results to a tidy data frame
+tidy_anova <- tidy(myanovatest)
+
+# Print tidy data frame
+tidy_anova
+```
+
+Based on the ANOVA test results, the p-value is almost zero, leading us to reject the null hypothesis. This implies that the mean number of fatalities in at least one region is significantly different from the others. In other words, the average loss of life in attacks varies significantly across regions, with at least one region experiencing a different average number of fatalities compared to the rest.
+
+As previously mentioned, the conditions required for ANOVA are not fully satisfied in this case. To further confirm the results, we can perform additional testing using a t-test between the means of fatalities in regions with the highest and lowest fatalities, specifically North America and Central America & Caribbean, respectively.
+
+```{r}
+nlevel <- nlevels(my_data$region_txt)
+kill_per_region <- split(my_data$nkill,my_data$region_txt)
+group = c(sum(kill_per_region[[1]]) , sum(kill_per_region[[2]]) , sum(kill_per_region[[3]]),
+           sum(kill_per_region[[4]]), sum(kill_per_region[[5]]), sum(kill_per_region[[6]]),
+           sum(kill_per_region[[7]]), sum(kill_per_region[[8]]), sum(kill_per_region[[9]]),
+           sum(kill_per_region[[10]]), sum(kill_per_region[[11]]), sum(kill_per_region[[12]]))
+
+means = c(mean(kill_per_region[[1]]) , mean(kill_per_region[[2]]) , mean(kill_per_region[[3]]),
+           mean(kill_per_region[[4]]), mean(kill_per_region[[5]]), mean(kill_per_region[[6]]),
+           mean(kill_per_region[[7]]), mean(kill_per_region[[8]]), mean(kill_per_region[[9]]),
+           mean(kill_per_region[[10]]), mean(kill_per_region[[11]]), mean(kill_per_region[[12]]))
+
+
+if(length(kill_per_region[[2]]) <= length(kill_per_region[[7]])){
+  group.1 <- sample(kill_per_region[[7]], length(kill_per_region[[2]]) ,  replace = FALSE)
+  group.2 <- kill_per_region[[2]]
+}
+if(length(kill_per_region[[2]]) > length(kill_per_region[[7]])){
+  group.1 <- sample(kill_per_region[[2]], length(kill_per_region[[7]]) ,  replace = FALSE)
+  group.2 <- kill_per_region[[7]]
+}
+
+group.1.mu =mean(group.1)
+group.1.var =var(group.1)
+group.1.n =length(group.1)
+
+group.2.mu =mean(group.2)
+group.2.var =var(group.2)
+group.2.n =length(group.2)
+
+SE = sqrt((group.1.var/group.1.n) + (group.2.var/group.2.n))
+z = (group.1.mu-group.2.mu-0)/SE
+
+pValue <- 2-2*pnorm(z , lower.tail = FALSE)
+
+results <- data.frame(pValue = pValue, SE = SE, mean = group.1.mu - group.2.mu, z = z)
+results
+
+```
+
+Based on the analysis of the t-test test, the obtained p-value is relatively high. This suggests that there is not enough evidence to reject the null hypothesis, which indicates that there is no statistically significant difference between the means of the highest and lowest groups. Therefore, we can conclude that the ANOVA test results should not be trusted for this data set. It is important to note that this conclusion is based on the available data and the assumptions made during the analysis, and further investigation may be needed to draw more definitive conclusions.
+
+### Analysis of success and failures of attacks:
+
+Based on the mean of the sample, it appears that only 3.5% of attacks resulted in failure. However, in order to determine whether this number is statistically significant and can be trusted, we conducted a t-test.
+
+Conditions:
+
+-   Random sampling $\checkmark$
+
+-   $n < 10\%$ of data $\to n < 5600$ $\checkmark$
+
+-   Success-failure condition $\to$ will be checked in the process
+
+The test was conducted using a two-tailed t-test with a significance level of $\alpha = 0.05$. The null hypothesis $H_0$ is that the failure rate of terrorist attacks is 0.035, while the alternative hypothesis $H_A$ is that the failure rate of terrorist attacks is not 0.035.
+
+```{r}
+#Data Reading
+my_data <- read.csv("Data.csv" , header = TRUE , na.strings = c("" , "NA"), fileEncoding="latin1")
+
+#Set constants
+sn=5600 #sample numbers
+
+#Sampling
+sample_data <-my_data[sample(nrow(my_data), sn ,  replace = TRUE), ]$success
+df <- as.data.frame(prop.table(table(sample_data)))
+
+#Testing
+if (df$Freq[1]*sn > 10 && df$Freq[2]*sn > 10){  #checking success-failure conditions
+  #if met the conditions
+  cat ("%%success-failure conditions are met%% \n")
+  #calculating z-statistic
+  mu= df$Freq[1]
+  SE=sqrt((df$Freq[1])*(1-df$Freq[1])/sn)
+  z = (abs(0.035-mu))/SE
+  #calculating p-value
+  pval=2*pnorm(z , lower.tail = FALSE)
+  #decision making
+  if (pval > 0.05) {
+    cat("p-value is: ", pval," and since it is more than 0.05 we do not have enough evidence to reject the null hypotehsis")
+  } else {
+      cat("p-value is: ", pval,"and since it is less than 0.05 we can reject the null hypotehsis")
+    } 
+  } else {
+    #if do not met the conditions
+    cat("%%success-failure conditions are not met%%")
+  }
+
+cat("\nEffect size of the test: ", abs(z))
+```
+
+The statistical test resulted in a p-value of 0.5528416, which is greater than the significance level of 0.05. Therefore, we do not have sufficient evidence to reject the null hypothesis. The effect size of the test is 0.5935075, which indicates a large enough difference between the groups to support the reliability of the mean.
+
+The observed high success rate is alarming, suggesting a pressing need for significant policy changes. To further investigate, we create a contingency table displaying the counts of success and failure for each type of attack.
+
+```{r}
+
+success <- my_data$success
+attacktype <- my_data$attacktype1_txt
+ctab <- table(success, attacktype)
+
+# Convert to data frame for easier manipulation
+ctab_df <- as.data.frame.matrix(ctab)
+
+
+
+# Add totals row and column
+ctab_df$Total <- rowSums(ctab_df)
+ctab_df <- rbind(ctab_df, colSums(ctab_df))
+#ctab_df[length(ctab_df[,1]),1] <- "Total"
+
+# Rename row labels to "Failure" and "Success"
+rownames(ctab_df) <- c("Failure", "Success", "Total")
+
+# Format table
+kbl(ctab_df, align = "c") %>%
+  row_spec(length(ctab_df[,1]), bold = TRUE) %>%
+  column_spec(length(ctab_df[1,])+1, bold = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+```
+
+To investigate more, we calculate the 95% confidence interval for difference in proportion of successful and unsuccessful arm assaults.
+
+```{r}
+
+##Contingency tables
+my_table <- table(my_data$success, my_data$attacktype1)
+my_proptable <- prop.table(table(my_data$success, my_data$attacktype1))
+n0 <- rowSums(my_table)[1]
+n1 <- rowSums(my_table)[2]
+##Calculating interval
+SE<-sqrt((my_proptable[1,2]*(1-my_proptable[1,2]))/n0 + (my_proptable[2,2]*(1-my_proptable[2,2]))/n1)
+Z <- qnorm((1 - 0.95) / 2)
+L= (my_proptable[1,2]-my_proptable[2,2])-SE*Z
+H= (my_proptable[1,2]-my_proptable[2,2])+SE*Z
+cat("the 95% confidence interval for difference in proportion of armed assaults which are successful and failed is (",L," , ",H,")")
+```
+
+$\hat{p}_{s(\text{ArmedAssault})} - \hat{p}_{m(\text{ArmedAssault})} = ( 0.3238004 , 0.3347367 )$
+
+### Analysis of attack-type and being a part of multiple incident attack
+
+One interesting research question is whether there is a relationship between the type of attack and whether it is part of a multi-attack incident. If such a relationship exists, we can identify the types of attacks that are more likely to be part of a multiple-incident event and take proactive measures to prevent further incidents from happening.
+
+To answer this question we perform the Chi-Square test of independence between these two features.
+
+Conditions:
+
+-   Random sample/assignment $\rightarrow$ done by data provider $\checkmark$
+
+-   If sampling without replacement, $n < 10%$ of population $\rightarrow$ $5600 < \text{total number of incidents}$ $\checkmark$
+
+-   Each case only contributes to one cell in the table $\checkmark$
+
+-   Each particular scenario (i.e. cell) must have at least 5 expected cases. $\times$
+
+```{r}
+my_table <- table(my_data$multiple, my_data$attacktype1_txt)
+#
+chi_test <- chisq.test(my_table)
+#expected values
+expected_table <- as.data.frame.matrix(chi_test$expected)
+rownames(expected_table) <- c("Failure", "Success")
+kbl(expected_table, align = "c") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
+
+#result
+chi_test
+```
+
+The Chi-Square test of independence results show a significant relationship between the attack type and being part of a multiple incident attack. The high value of the test statistic (X-squared = 801.66) and the low p-value (\< 2.2e-16) indicate that the relationship between these two features is not due to chance.
+
+This suggests that certain attack types are more likely to be part of a multiple incident attack. Therefore, by identifying the attack types that have a higher likelihood of being part of a multiple incident attack, it may be possible to improve prevention and response strategies to reduce the risk of future incidents.
+
+### Analysis of fatalities in US and Canada
+
+In this section, we aim to investigate the statistical significance of the difference in mean of fatalities between the neighboring countries of the United States and Canada. Although the two countries share similarities in cultural and geopolitical attributes, it appears that there may be a notable discrepancy in their respective mean fatality rates. Our analysis will enable us to determine whether this observed difference is statistically significant or merely due to chance.
+
+```{r}
+us_kill<-my_data[my_data$country_txt=='United States',]$nkill
+ca_kill<-my_data[my_data$country_txt=='Canada',]$nkill
+SE <- sqrt(var(us_kill) / length(us_kill) + var(ca_kill) / length(ca_kill))
+Z <- (mean(us_kill) - mean(ca_kill)) / SE
+p_value <- pnorm(Z, lower.tail=FALSE)
+p_value
+```
+
+Since $p\text{-value} = 0.04637802 < 0.05$, we can conclude that the difference in mean fatalities between the United States and Canada is statistically significant. However, it is important to note that the United States has experienced the two catastrophes of 9/11 which could be considered as outliers in their fatality rate. Before we finalize our analysis, we would like to conduct the test again by removing these outliers from the dataset.
+
+```{r}
+us_kill<-my_data[my_data$country_txt=='United States',]$nkill
+us_kill<- us_kill[-c(15,16)]
+ca_kill<-my_data[my_data$country_txt=='Canada',]$nkill
+SE <- sqrt(var(us_kill) / length(us_kill) + var(ca_kill) / length(ca_kill))
+Z <- (mean(us_kill) - mean(ca_kill)) / SE
+p_value <- pnorm(Z, lower.tail=FALSE)
+p_value
+```
+
+The statistical analysis conducted indicates that the mean number of fatalities in the United States and Canada are significantly different, even after removing outliers $p\text{-value} = 0.02326416 < 0.05$. This difference may be due to various factors, including the freedom to carry firearms granted by the Second Amendment in the United States, or the higher population density in certain regions of the country.
+
+It should be noted, however, that the number of incidents in Canada is less than 30, which is the recommended minimum sample size for conducting t-tests. Although the conditions for performing the t-tests are satisfied, we should be cautious in interpreting the results, as the sample size may not be representative of the population as a whole. Therefore, while the analysis indicates a statistically significant difference between the two countries, further research is needed to fully understand the factors contributing to this disparity.
+
+## Predictive Modeling
+
+### Predictive analysis on number of fatalities:
+
+For our study, we aimed to create a linear model that could predict the number of fatalities in an attack. To do this, we conducted an explanatory analysis on several variables and selected a set of eight variables to include in our model. These variables are presented below in bullet point format:
+
+-   nwound: Total number of injured individuals during the attack
+
+-   nperps: Total number of perpetrators
+
+-   attacktype1: Type of the attack
+
+-   imonth: Month of occurrence of the attack
+
+-   success: Successfulness of the attack
+
+-   weaptype1: Type of weapon used in the attack
+
+-   vicinity: Whether the attack occurred in the immediate vicinity of the city or not
+
+-   suicide: Whether the attack involved a suicide attacker or not
+
+Our goal is to use backward elimination to determine which variables significantly affect the number of fatalities and construct a more concise model with optimal predictive performance.
+
+```{r}
+my_data <- read.csv("Data.csv" , header = TRUE , na.strings = c("" , "NA"), fileEncoding="latin1")
+```
+
+```{r}
+
+# Step 1
+cat("Adjusted R-squared for model with all predictors: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + imonth + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+# Step 2 
+
+cat("Adjusted R-squared for model without weaptype1: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + imonth + success + country + suicide + vicinity, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without vicinity: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + imonth + success + country + suicide + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without country: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + imonth + success + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without suicide: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + imonth + success + country + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without attacktype1: ", summary(lm(nkill ~ nwound + nperps + imonth + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without imonth: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without nperps: ", summary(lm(nkill ~ nwound + attacktype1 + imonth + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without nwound: ", summary(lm(nkill ~ nperps + attacktype1 + imonth + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+
+```
+
+imonth needs to be removed:
+
+```{r}
+
+# Step 3:
+
+cat("Adjusted R-squared for model without imonth: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without weaptype1 and imonth: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + success + country + suicide + vicinity, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without vicinity and imonth: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + success + country + suicide + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without country and imonth: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + success + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without suicide and imonth: ", summary(lm(nkill ~ nwound + nperps + attacktype1 + success + country + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without attacktype1 and imonth: ", summary(lm(nkill ~ nwound + nperps + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without nperps and imonth: ", summary(lm(nkill ~ nwound + attacktype1 + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+cat("Adjusted R-squared for model without nwound and imonth: ", summary(lm(nkill ~ nperps + attacktype1 + success + country + suicide + vicinity + weaptype1, data = my_data))$adj.r.squared, "\n")
+
+```
+
+No variable can be eliminated at this point.
+
+for test in a larger scale we also investigated the following variables:
+
+-   iyear: year of the attack
+
+-   nwoundte: number of perpetrators injured
+
+-   nkillter: number of perpetrators killed
+
+-   iday: day of the attack
+
+-   claimed: responsibility of the attack claimed
+
+-   compclaim: terrorist groups competed for claiming the responsibility
+
+-   nperpcap: number of perpetrators captured
+
+-   propextent: extent of property damage
+
+We found the following variables the best combination:
+
+nwound, nperp, claimed, Success, compclaim
+
+The final linear model is as follow:
+
+```{r}
+data_noNA <- my_data[!is.na(my_data$compclaim),]
+data_noNA <- data_noNA[!is.na(data_noNA$nwound),]
+data_noNA <- data_noNA[!is.na(data_noNA$nperps),]
+my_model <- lm(nkill ~ nwound+nperps+as.factor(success)+as.factor(claimed)+as.factor(compclaim), data = data_noNA)
+summary(my_model)
+```
+
+Note that we removed missing data in compclaim, nwound and nperps.
+
+$$ nkill = 1.526631 + 0.188214 \times nwound + 0.019663 \times nperp + 3.163500 \times success + 10.353310 \times unclaimed \\ \qquad - 0.569314 \times claimed + 0.907259 \times uncompclaimed + 2.496140 \times compclaimed $$
+
+Adjusted R-squared takes into account the number of predictors in the model and adjusts the R-squared accordingly. In the present model, the adjusted R-squared value is 0.9658, which means that 96.58% of the variability in the nkills variable can be explained by the model, considering the number of predictors. This indicates that the model is a good fit for the data and has a high degree of explanatory power.
+
+The multiple linear regression model suggests that the number of casualties in a terrorist attack is influenced by various factors. The intercept, which is statistically significant, represents the number of casualties when all other independent variables are held constant. The parameter estimate for nwound indicates that for every increase in the number of injured people, the number of casualties is expected to increase by 0.188214. Similarly, the parameter estimate for nperps suggests that for every increase in the number of attackers, the number of casualties is expected to increase by 0.019663.
+
+The success of the attack also appears to be a significant factor in determining the number of casualties, with successful attacks expected to result in 3.163500 more casualties than unsuccessful attacks. Furthermore, the claimed variable also appears to have a significant impact on the number of casualties. Specifically, in cases where no group claims responsibility for an attack, the number of casualties is expected to be 10.353310 more than cases where it is unclear whether a group has taken responsibility or not. Conversely, in cases where a group claims responsibility, the number of casualties is expected to be 0.569314 less than cases where it is unclear whether a group has taken responsibility or not.
+
+#### Checking the conditions
+
+In order to evaluate the reliability of the model, it is necessary to assess whether three conditions are met. The first condition is linearity, which means that the relationship between the response variable and the predictor variables is linear. This assumption can be checked by examining the scatterplot of the residuals against the fitted values. The second condition is that the residuals should be nearly normally distributed. This assumption can be checked by examining the histogram or the normal probability plot of the residuals. Finally, the third condition is that the variability of the residuals should be constant across all levels of the predictor variables. This assumption can be checked by examining the scatterplot of the residuals against the predictor variables. If these conditions are not met, it may be necessary to modify the model or consider alternative methods for analyzing the data.
+
+##### 1. linearity
+
+```{r}
+# Scatter plot for nwound vs residuals
+ggplot(data_noNA, aes(x = nwound, y = my_model$residuals)) + 
+  geom_point(color = "#0072B2", alpha = 0.7, size = 3) + ylim(-50,60)+xlim(0,100) +
+  labs(title = "Scatter plot of Residuals vs. Nwound",
+       x = "Nwound",
+       y = "Residuals") +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+# Scatter plot for nperps vs residuals
+ggplot(data_noNA, aes(x = nperps, y = my_model$residuals)) + 
+  geom_point(color = "#D55E00", alpha = 0.7, size = 3) + ylim(-50,60)+xlim(0,100) +
+  labs(title = "Scatter plot of Residuals vs. Nperps",
+       x = "Nperps",
+       y = "Residuals") +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+Based on the equal distribution of points above and below the zero point, it can be inferred that a linear relationship exists between the numerical explanatory variables and the response variable. This indicates that for each unit increase in the explanatory variables, the response variable increases or decreases by a constant amount.
+
+##### 2. Nearly normal distribution of residuals:
+
+```{r}
+
+# Histogram
+res<-my_model$residuals
+IQR <- quantile(res)[[4]] - quantile(res)[[2]]
+binwidth <- 2*IQR*(length(res)^(-1/3))   # recomended bin size
+qplot(res,geom="histogram",binwidth = binwidth,xlim=c(-15,15),fill=I("navy"))
+## qqplot
+y <- quantile(res, c(0.25, 0.75))
+x <- qnorm(c(0.25, 0.75))
+slope = diff(y)/diff(x)
+int = y[1]-slope*x[1]
+df <- data.frame(res)
+ggplot(df, aes(sample = res))+geom_qq()+geom_abline(slope = slope, intercept = int, col = "deepskyblue")
+```
+
+The distribution has a light skewness, it is not completely normal, but within acceptable range.
+
+##### 3. Constant variability:
+
+```{r}
+ggplot(data_noNA, aes(x = my_model$fitted.values, y = abs(my_model$residuals))) + 
+  geom_point(color = "#00AFBB", size = 3) +
+  labs(title = "Absolute Residuals vs Fitted Values", x = "Fitted Values", y = "Absolute Residuals") +
+  theme_bw() + 
+  ylim(0, 60) + xlim(0, 40)
+
+ggplot(data_noNA, aes(x = my_model$fitted.values, y = my_model$residuals)) + 
+  geom_point(color = "#FC4E07", size = 3) +
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
+  theme_bw() + 
+  ylim(-50, 60) + xlim(0, 40)
+
+```
+
+##### Correlation of numerical variables
+
+In statistical analysis, correlation measures the strength of the relationship between two numerical variables. For categorical variables, we use the independence Chi-squared test. After conducting this test, it was observed that there is no significant correlation between the number of wounded people and the number of perpetrators in a terrorist attack. Therefore, neither variable can be removed from the model as they both have independent effects on the response variable.
+
+```{r}
+table1<-data.table(data_noNA$nwound,data_noNA$nperps)
+cortab <- cor(table1)
+cortab
+```
+
+#### Evaluation of reliability
+
+The use of 5-fold cross-validation can help us determine the generalization performance of our model. By splitting our data into five subsets and using four for training and the remaining one for testing, we can measure the performance of our model on data that it has not seen before. In this case, we are interested in the test Root Mean Squared Error (RMSE) of our final model. The test RMSE can provide us with an estimate of the average difference between the predicted values of our model and the actual values on new, unseen data. A lower test RMSE indicates that our model is better at predicting the outcome variable and that it has better generalization performance. By reporting the test RMSE of our final model, we can assess its performance on new, unseen data and understand how well it will perform in practice.
+
+```{r}
+cvResults <- suppressWarnings(CVlm(data = data_noNA,nkill ~ nwound+nperps+as.factor(success)+as.factor(claimed)+as.factor(compclaim), m=5, legend.pos="topleft", printit=FALSE));
+attr(cvResults, 'ms')
+```
+
+$RMSE = 215.508$
+
+### Predictive analysis on success of the attacks:
+
+In addition to predicting the number of fatalities in a terrorist attack, the success of the attack is also an important factor to consider in devising effective counter-terrorism measures. Logistic regression can be used to predict the success of an attack using the same variables discussed in predicting the number of fatalities. The logistic regression model estimates the probability of success of an attack as a function of the same explanatory variables.
+
+```{r}
+data_noNA <- my_data[!is.na(my_data$suicide),]
+data_noNA <- data_noNA[!is.na(data_noNA$nperps),]
+data_noNA <- data_noNA[!is.na(data_noNA$nperpcap),]
+success<-data_noNA$success
+individual<-as.factor(data_noNA$individual)
+nperps<-data_noNA$nperps
+nkill<-data_noNA$nkill
+nperpcap<-data_noNA$nperpcap
+suicide<-as.factor(data_noNA$suicide)
+my_model<- glm(success ~ individual+ nperps+ nkill+nperpcap+suicide)
+summary(my_model)
+```
+
+$\log\left(\frac{p_{\text{success}}}{1-p_{\text{success}}}\right)=9.563\times 10^{-1}-1.334\times 10^{-4}\times\text{nperps}+1.622\times 10^{-4}\times\text{nkill}\\ \qquad-2.068\times 10^{-4}\times\text{nperpcap}-6.287\times 10^{-2}\times\text{suicide}+2.921\times 10^{-2}\times\text{individual}$
+
+The intercept term of the logistic regression model is $9.563\times 10^{-1}$, which indicates that when all of the predictor variables are equal to zero, the log odds of success is $9.563\times 10^{-1}$. For numerical variables, a unit increase in the number of perpetrators will result in a decrease of log odds of success by $1.334\times 10^{-4}$, whereas a unit increase in the number of kills will lead to an increase of log odds of success by $1.622\times 10^{-4}$. Similarly, a unit increase in the number of captured perpetrators will result in a decrease of log odds of success by $2.068\times 10^{-4}$. For categorical variables, the log odds of success is $6.287\times 10^{-2}$ lower for attacks carried out by suicidal terrorists compared to those without them. In contrast, the log odds of success is $2.921\times 10^{-2}$ higher for attacks carried out by individual terrorists compared to those acting as part of an organization.
+
+#### Calculating 98% confidence interval for odd ratios:
+
+The confidence interval (CI) for a point estimate is given by:
+
+$CI = \text{point estimate} \pm \text{margin of error} = b_1 \pm t_{df}^* \times SE_{b_1}$
+
+where $df$ is the degrees of freedom, $t_{df}^*$ is the critical value of the t-distribution for a given confidence level and degrees of freedom, and $SE_{b_1}$ is the standard error of the coefficient $b_1$.
+
+Given that in this case $df=45147$ and $t_{df}^*=2.33$, the confidence intervals for each variable can be calculated as follows:
+
+$e^{CI_{nperps}} = \exp(-1.334 \times 10^{-4} \pm 1.510 \times 10^{-5} \times 2.33)$
+
+$e^{CI_{nkill}} = \exp(1.622 \times 10^{-4} \pm 5.597 \times 10^{-5} \times 2.33)$
+
+$e^{CI_{nperpcap}} = \exp(-2.068 \times 10^{-4} \pm 1.060 \times 10^{-5} \times 2.33)$
+
+$e^{CI_{individual}} = \exp(2.921 \times 10^{-2} \pm 1.884 \times 10^{-2} \times 2.33)$
+
+$e^{CI_{suicide}} = \exp(-6.287 \times 10^{-2} \pm 3.097 \times 10^{-3} \times 2.33)$
+
+#### ROC curve:
+
+```{r}
+# Predict probabilities
+prob <- predict(my_model, type = "response")
+
+# Calculate ROC curve
+roc <- roc(success ~ prob, data = data_noNA)
+
+# Plot ROC curve with labels and legend
+plot(roc, main = "Receiver Operating Characteristic (ROC) Curve",
+     xlab = "False Positive Rate", ylab = "True Positive Rate",
+     print.auc = TRUE, print.auc.y = 0.4)
+
+# Add diagonal reference line and shade AUC
+abline(a = 0, b = 1, lty = 2)
+text(0.5, 0.5, paste0("AUC = ", round(auc(roc), 3)))
+```
+To assess the performance of the classifier, we generated a Receiver Operating Characteristic (ROC) curve using the predicted probabilities from the model. The area under the curve (AUC) is a commonly used metric to evaluate the performance of binary classification models, with values ranging from 0 to 1, where higher values indicate better discrimination between the classes.
+
+However, in our case, the AUC of the ROC curve was not sufficiently high to consider the classifier as a good predictive model for our data. Therefore, further investigation and development of the model may be necessary to improve its performance.
