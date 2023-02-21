@@ -1,4 +1,4 @@
-# Statistical and Predictive Analysis on the United Nations Global Terrorism Database (GTD)
+# Statistical and Predictive Analysis on the United Nations' Global Terrorism Database (GTD)
 
 This project is an in-depth analysis of the United Nations Global Terrorism Database (GTD), conducted using the R programming language. The aim of the project was to explore the GTD, identify patterns and trends, and develop a predictive model to classify the success of terrorist attacks based on various factors.
 
