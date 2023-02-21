@@ -14,6 +14,8 @@ Exploratory Data Analysis (EDA) was a critical step in understanding the Global 
 
 In this section, our analysis focused on several aspects of the data. Firstly, we examined temporal patterns throughout the years, to identify any trends or changes in terrorism patterns over time. Secondly, we analyzed attack casualties and its relations to other numerical and categorical variables to gain insights into the characteristics of different types of attacks. Thirdly, we conducted correlation analysis to determine the strength and direction of relationships between variables in the data. Fourthly, we analyzed the attacks in different regions of the world to gain insights into global terrorism patterns. Lastly, we examined different types of attacks to identify any patterns in the methods used in terrorist attacks.
 
+![EDA](https://github.com/soroushsheikh/UNDataSetStatisticalAnalysis/blob/main/EDA.png)
+
 Overall, EDA was a crucial step in understanding the GTD data and provided valuable insights into the trends and patterns in global terrorism. The visualizations and analysis performed in this section laid the groundwork for subsequent predictive modeling and analysis.
 
 ### Statistical Analysis
